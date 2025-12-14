@@ -1,0 +1,16 @@
+{
+  "source": "ofac_xml",
+  "updatedAt": "2025-12-13T00:00:00.000Z",
+  "total": 1,
+  "data": [
+    {
+      "uid": "36",
+      "id": "36",
+      "type": "Entity",
+      "name": "AEROCARIBBEAN AIRLINES",
+      "birth": "",
+      "country": "Cuba",
+      "isKorea": false
+    }
+  ]
+}
