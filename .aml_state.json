@@ -1,9 +1,12 @@
 {
   "ofac": {
-    "publishDate": "12/19/2025"
+    "publishDate": "12/19/2025",
+    "etag": "",
+    "lastModified": "Fri, 19 Dec 2025 19:01:23 GMT"
   },
   "un": {
-    "dateGenerated": ""
-  },
-  "updatedAt": "2025-12-20T15:02:12.144Z"
+    "dateGenerated": "",
+    "etag": "",
+    "lastModified": ""
+  }
 }
