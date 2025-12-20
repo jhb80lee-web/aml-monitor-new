@@ -1,0 +1,56 @@
+name: AML Auto Update (OFAC/UN - change only)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 30분마다 (원하면 10분/1시간 등으로 바꾸면 됨)
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aml-auto-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Check source change (OFAC/UN)
+        id: check
+        run: node scripts/check_updates.mjs
+
+      - name: Update OFAC (only if changed)
+        if: steps.check.outputs.ofac_changed == 'true'
+        run: node scripts/ofac_update.mjs
+
+      - name: Update UN (only if changed)
+        if: steps.check.outputs.un_changed == 'true'
+        run: node scripts/un_update.mjs
+
+      - name: Commit state file (only if changed)
+        # .aml_state.json이 바뀐 경우만 커밋/푸시
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .aml_state.json
+            git commit -m "chore: update AML source state"
+            git push
+          else
+            echo "No state changes to commit."
+          fi
