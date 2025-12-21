@@ -2,6 +2,17 @@ name: AML Auto Update (OFAC/UN - change only)
 
 on:
   workflow_dispatch:
+    inputs:
+      force_ofac:
+        description: "FORCE: treat OFAC as changed (run update even if no change)"
+        required: false
+        default: false
+        type: boolean
+      force_un:
+        description: "FORCE: treat UN as changed (run update even if no change)"
+        required: false
+        default: false
+        type: boolean
   schedule:
     # 30분마다 (원하면 10분/1시간 등으로 바꾸면 됨)
     - cron: "*/30 * * * *"
@@ -31,6 +42,9 @@ jobs:
 
       - name: Check source change (OFAC/UN)
         id: check
+        env:
+          FORCE_OFAC: ${{ inputs.force_ofac && '1' || '0' }}
+          FORCE_UN: ${{ inputs.force_un && '1' || '0' }}
         run: node scripts/check_updates.mjs
 
       - name: Update OFAC (only if changed)
