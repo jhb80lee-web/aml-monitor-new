@@ -78,7 +78,13 @@ function buildSig({ primary, etag, lastModified }) {
 async function main() {
   const prev = readState();
 
+  // ✅ FORCE 플래그 (workflow_dispatch에서만 env로 전달됨)
+  const forceOfac = process.env.FORCE_OFAC === "1";
+  const forceUn = process.env.FORCE_UN === "1";
+
   console.log("🔎 Checking OFAC / UN source timestamps (HEAD + fallback)...");
+  console.log("🧪 FORCE_OFAC:", forceOfac ? "ON" : "OFF");
+  console.log("🧪 FORCE_UN  :", forceUn ? "ON" : "OFF");
 
   const [ofacHead, unHead] = await Promise.all([
     fetchHead(OFAC_XML_URL),
@@ -148,20 +154,26 @@ async function main() {
   const ofacChanged = nowOfacSig !== prevOfacSig && nowOfacSig !== "||";
   const unChanged = nowUnSig !== prevUnSig && nowUnSig !== "||";
 
-  setOutput("ofac_changed", ofacChanged ? "true" : "false");
-  setOutput("un_changed", unChanged ? "true" : "false");
+  // ✅ 출력은 FORCE 반영 (강제 누적 테스트용)
+  const ofacChangedFinal = forceOfac ? true : ofacChanged;
+  const unChangedFinal = forceUn ? true : unChanged;
+
+  setOutput("ofac_changed", ofacChangedFinal ? "true" : "false");
+  setOutput("un_changed", unChangedFinal ? "true" : "false");
 
   console.log("✅ OFAC publishDate:", currentOfac.publishDate);
   console.log("✅ OFAC etag:", currentOfac.etag);
   console.log("✅ OFAC lastModified:", currentOfac.lastModified);
-  console.log("➡️ ofac_changed:", ofacChanged);
+  console.log("➡️ ofac_changed:", ofacChanged, forceOfac ? "(forced)" : "");
+  console.log("➡️ ofac_changed_final:", ofacChangedFinal);
 
   console.log("✅ UN dateGenerated:", currentUn.dateGenerated);
   console.log("✅ UN etag:", currentUn.etag);
   console.log("✅ UN lastModified:", currentUn.lastModified);
-  console.log("➡️ un_changed:", unChanged);
+  console.log("➡️ un_changed:", unChanged, forceUn ? "(forced)" : "");
+  console.log("➡️ un_changed_final:", unChangedFinal);
 
-  // 변경이 있을 때만 state 저장(불필요 커밋 방지)
+  // ⚠️ state 저장은 "실제 변경" 기준 (FORCE로 state가 바뀌면 안됨)
   if (ofacChanged || unChanged || !fs.existsSync(STATE_FILE)) {
     const next = {
       ofac: currentOfac,
