@@ -1,0 +1,73 @@
+name: AML Auto Update (KoFIU - change only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_vasp:
+        description: "FORCE: treat KoFIU VASP as changed (run update even if no change)"
+        required: false
+        default: false
+        type: boolean
+      force_restricted:
+        description: "FORCE: treat KoFIU Restricted as changed (run update even if no change)"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aml-auto-update-kofiu
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Check source change (KoFIU)
+        id: check
+        env:
+          FORCE_VASP: ${{ inputs.force_vasp && '1' || '0' }}
+          FORCE_RESTRICTED: ${{ inputs.force_restricted && '1' || '0' }}
+        run: node scripts/check_kofiu_updates.mjs
+
+      - name: Update KoFIU VASP (only if changed)
+        if: steps.check.outputs.vasp_changed == 'true'
+        env:
+          WORKER_BASE_URL: ${{ secrets.WORKER_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: node scripts/kofiu_vasp_update.js
+
+      - name: Update KoFIU Restricted (only if changed)
+        if: steps.check.outputs.restricted_changed == 'true'
+        env:
+          WORKER_BASE_URL: ${{ secrets.WORKER_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: node scripts/kofiu_restricted_update.js
+
+      - name: Commit state file (only if changed)
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .aml_state.json
+            git commit -m "chore: update AML source state (kofiu)"
+            git push
+          else
+            echo "No state changes to commit."
+          fi
