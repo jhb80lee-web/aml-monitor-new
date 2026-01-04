@@ -4,8 +4,9 @@ import { XMLParser } from "fast-xml-parser";
 const WORKER_BASE = "https://orange-bread-2e13.jhb80lee-793.workers.dev";
 const ADMIN_KEY = "aml-admin-key-2025";
 
-// UN Security Council Consolidated List (XML)
-const UN_XML_URL = "https://scsanctions.un.org/resources/xml/en/consolidated.xml";
+// ✅ UN 원본 URL 교체(기존 scsanctions 경로 404)
+const UN_XML_URL =
+  "https://unsolprodfiles.blob.core.windows.net/publiclegacyxmlfiles/EN/consolidatedLegacyByNAME.xml";
 
 function asArray(v) {
   if (!v) return [];
@@ -71,10 +72,12 @@ async function main() {
   }
 
   const xml = await xmlRes.text();
+  const httpLastModified = xmlRes.headers.get("last-modified") || "";
 
   console.log("2) Parsing XML...");
 
-  const parser = new XMLParser({ ignoreAttributes: true });
+  // ✅ dateGenerated="..." 속성을 읽기 위해 ignoreAttributes=false
+  const parser = new XMLParser({ ignoreAttributes: false });
   const parsed = parser.parse(xml);
 
   // 루트는 보통 CONSOLIDATED_LIST
@@ -85,11 +88,13 @@ async function main() {
 
   if (!root) throw new Error("Parsed XML missing CONSOLIDATED_LIST root");
 
-  // 생성일(있으면)
+  // 생성일(있으면) — 이번 XML은 <CONSOLIDATED_LIST ... dateGenerated="...">
   const updatedAt =
     s(root?.DATE_GENERATED) ||
     s(root?.dateGenerated) ||
+    s(root?.["@_dateGenerated"]) || // ✅ 루트 attribute
     s(root?.GENERATED_ON) ||
+    (httpLastModified ? new Date(httpLastModified).toISOString() : "") ||
     "";
 
   const individuals = asArray(root?.INDIVIDUALS?.INDIVIDUAL);
@@ -143,7 +148,6 @@ async function main() {
       birth,
       country,
       isKorea,
-      // (선택) 앱 팝업/디버깅에 쓰고 싶으면 유지 가능
       // fullText,
     });
   }
@@ -176,9 +180,7 @@ async function main() {
 
   const payload = {
     source: "un_xml",
-    updatedAt: updatedAt
-      ? new Date(updatedAt).toISOString()
-      : new Date().toISOString(),
+    updatedAt: updatedAt ? new Date(updatedAt).toISOString() : new Date().toISOString(),
     total: data.length,
     data,
   };
