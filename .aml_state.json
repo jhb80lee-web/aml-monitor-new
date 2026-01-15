@@ -2,45 +2,11 @@
   "ofac": {
     "publishDate": "12/19/2025",
     "etag": "",
-    "lastModified": "Tue, 13 Jan 2026 15:04:50 GMT"
+    "lastModified": "Thu, 15 Jan 2026 15:00:04 GMT"
   },
   "un": {
     "dateGenerated": "",
     "etag": "",
     "lastModified": ""
-  },
-  "kofiu": {
-    "vasp": {
-      "sig": "42e296c3708216f7761056630f9dc05c177b62eb57c189c7f96e3542f9c8e76e",
-      "meta": {
-        "seCd": "0007",
-        "chosen": {
-          "ntcnYardOrdrNo": "194",
-          "title": "가상자산사업자 신고 현황(2026.1.14. 기준)"
-        },
-        "file": {
-          "name": "가상자산사업자 신고에 관한 정보공개현황(2026.1.14. 기준).xlsx"
-        }
-      }
-    },
-    "restricted": {
-      "sig": "cd0e5ede87b607996b06562039280a60daab78bb63b94c04b8652f35132f5817",
-      "meta": {
-        "law": {
-          "ordrNo": "84",
-          "seCd": "001",
-          "lawordInfoTySeCd": "001"
-        },
-        "best": {
-          "fileNm": "금융위원회 고시 제2025-33호(금융거래등제한대상자 지정 및 지정 취소에 관한 규정 일부개정)_수정.hwpx",
-          "streFileNm": "202511193211670q.hwpx",
-          "fileOrdrNo": "1",
-          "fileSize": 196005,
-          "mime": "application/haansofthwpx",
-          "cours": "/data/HPG/"
-        },
-        "filesDigest": "9b4b80b25217778c126b43b1493667f1859643c6c11f556ac418603161c3b10f"
-      }
-    }
   }
 }
