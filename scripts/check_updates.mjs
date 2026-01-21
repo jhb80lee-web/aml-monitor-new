@@ -77,7 +77,11 @@ async function fetchHead(url) {
 
 async function fetchText(url) {
   const res = await fetch(url, {
-    headers: { "User-Agent": "aml-monitor-actions/1.0" },
+  headers: {
+      "User-Agent": "aml-monitor-actions/1.0",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+    },
   });
   if (!res.ok) throw new Error(`Fetch failed ${res.status} for ${url}`);
   return await res.text();
@@ -370,10 +374,7 @@ async function main() {
     !ofacPublishDate || (!ofacHead.etag && !ofacHead.lastModified);
 
   // ✅ UN은 last-modified가 바뀌면(=신규 생성) dateGenerated 갱신을 위해 본문 파싱 수행
-  const maybeNeedUnGet =
-    !unDateGenerated ||
-    (!unHead.etag && !unHead.lastModified) ||
-    (unHead.lastModified && unHead.lastModified !== prevUnLastModified);
+    const maybeNeedUnGet = true; // ✅ dateGenerated 기반 “무조건 changed”를 보장하려면 항상 GET
 
   let ofacXml = "";
   let unXml = "";
