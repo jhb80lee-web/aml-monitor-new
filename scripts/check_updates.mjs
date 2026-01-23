@@ -64,10 +64,17 @@ function extractOfacPublishDate(xml) {
 }
 
 function extractUnDateGenerated(xml) {
+  const src = String(xml || "");
+
+  // ✅ 현재 UN 포맷: 루트 속성 dateGenerated="..."
+  const attr = src.match(/\bdateGenerated\s*=\s*["']([^"']+)["']/i);
+  if (attr?.[1]) return String(attr[1]).trim();
+
+  // ✅ 예전/다른 포맷 fallback
   const m =
-    xml.match(/<DATE_GENERATED>\s*([^<]+)\s*<\/DATE_GENERATED>/i) ||
-    xml.match(/<dateGenerated>\s*([^<]+)\s*<\/dateGenerated>/i) ||
-    xml.match(/<GENERATED_ON>\s*([^<]+)\s*<\/GENERATED_ON>/i);
+    src.match(/<DATE_GENERATED>\s*([^<]+)\s*<\/DATE_GENERATED>/i) ||
+    src.match(/<dateGenerated>\s*([^<]+)\s*<\/dateGenerated>/i) ||
+    src.match(/<GENERATED_ON>\s*([^<]+)\s*<\/GENERATED_ON>/i);
   return m ? String(m[1]).trim() : "";
 }
 
