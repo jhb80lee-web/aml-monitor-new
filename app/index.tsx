@@ -1,4 +1,5 @@
-// app/index.tsx
-import HomeScreen from "./Home"; // app/Home/index.tsx 에서 default export
+import { Redirect } from "expo-router";
 
-export default HomeScreen;
+export default function Index() {
+  return <Redirect href="/Home/watchlist" />;
+}

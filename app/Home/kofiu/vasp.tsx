@@ -1,3 +1,4 @@
+// app/Home/kofiu/vasp.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { API_BASE_URL } from "../../../constants/api";
+import BottomTabBar from "../../../components/BottomTabBar";
 
 // 정상 사업자
 type VaspItem = {
@@ -97,9 +99,7 @@ export default function VaspScreen() {
     <View key={item.no} style={styles.row}>
       <View style={styles.rowHeader}>
         <Text style={styles.companyText}>{item.company}</Text>
-        {item.ceo ? (
-          <Text style={styles.ceoText}>대표자 {item.ceo}</Text>
-        ) : null}
+        {item.ceo ? <Text style={styles.ceoText}>대표자 {item.ceo}</Text> : null}
       </View>
       <Text style={styles.serviceText}>{item.service}</Text>
     </View>
@@ -116,17 +116,20 @@ export default function VaspScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.inner}>
-        {/* 상단 요약 카드 */}
-        <View style={styles.headerCard}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.inner}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ✅ 상단 헤더 (KoFIU 홈과 동일 톤) */}
+        <View style={styles.header}>
           <Text style={styles.appName}>AML MONITOR</Text>
           <Text style={styles.title}>가상자산사업자 신고현황</Text>
+
           {meta.updatedAt ? (
-            <Text style={styles.subText}>
-              기준일 {meta.updatedAt.slice(0, 10)}
-            </Text>
+            <Text style={styles.subtitle}>기준일 {meta.updatedAt.slice(0, 10)}</Text>
           ) : null}
-          <Text style={styles.subText}>총 {meta.total}개사</Text>
+          {/* ✅ "총 OO개사" 삭제 */}
         </View>
 
         {/* 검색 */}
@@ -139,12 +142,34 @@ export default function VaspScreen() {
         />
 
         {loading && (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" />
-            <Text style={styles.loadingText}>불러오는 중…</Text>
-          </View>
-        )}
+  <>
+    <View style={styles.sectionCard}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>정상 신고</Text>
+        <Text style={styles.sectionCount}>-</Text>
+      </View>
+      <View style={styles.sectionBody}>
+        <View style={styles.listLoading}>
+          <ActivityIndicator />
+          <Text style={styles.loadingText}>불러오는 중…</Text>
+        </View>
+      </View>
+    </View>
 
+    <View style={styles.sectionCard}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>미갱신 사업자</Text>
+        <Text style={styles.sectionCount}>-</Text>
+      </View>
+      <View style={styles.sectionBody}>
+        <View style={styles.listLoading}>
+          <ActivityIndicator />
+          <Text style={styles.loadingText}>불러오는 중…</Text>
+        </View>
+      </View>
+    </View>
+  </>
+)}
         {!loading && error && (
           <View style={styles.center}>
             <Text style={styles.errorText}>{error}</Text>
@@ -153,7 +178,6 @@ export default function VaspScreen() {
 
         {!loading && !error && (
           <>
-            {/* ✅ 정상 신고 카드 */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>정상 신고</Text>
@@ -161,13 +185,9 @@ export default function VaspScreen() {
                   {filteredNormal.length.toLocaleString()}개사
                 </Text>
               </View>
-
-              <View style={styles.sectionBody}>
-                {filteredNormal.map(renderNormalRow)}
-              </View>
+              <View style={styles.sectionBody}>{filteredNormal.map(renderNormalRow)}</View>
             </View>
 
-            {/* ✅ 미갱신 카드 (위 카드와 여백으로 구분) */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>미갱신 사업자</Text>
@@ -175,47 +195,44 @@ export default function VaspScreen() {
                   {filteredExpired.length.toLocaleString()}개사
                 </Text>
               </View>
-
-              <View style={styles.sectionBody}>
-                {filteredExpired.map(renderExpiredRow)}
-              </View>
+              <View style={styles.sectionBody}>{filteredExpired.map(renderExpiredRow)}</View>
             </View>
           </>
         )}
       </ScrollView>
+
+      <BottomTabBar />
     </SafeAreaView>
   );
 }
 
-// ===== 색상 팔레트 (짙은 남색 계열) =====
+// ===== 색상 팔레트 =====
 const BG = "#020617";
 const CARD_BG = "#0B1120";
 const CARD_BORDER = "#1F2937";
 const TEXT_PRIMARY = "#F9FAFB";
 const TEXT_SECONDARY = "#9CA3AF";
-const ACCENT = "#4F8CFF";
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   scroll: { flex: 1 },
-  inner: { padding: 16, paddingBottom: 24 },
-
-  headerCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
-  },
+  inner: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 130 },
+listLoading: { paddingVertical: 24, alignItems: "center" },
+  // ✅ (추가) KoFIU/OFAC/UN과 동일한 헤더 톤
+  header: { paddingBottom: 10 },
   appName: {
     fontSize: 11,
     letterSpacing: 3,
-    color: TEXT_SECONDARY,
-    marginBottom: 4,
+    color: "rgba(234,240,255,0.55)",
+    marginBottom: 6,
   },
-  title: { color: TEXT_PRIMARY, fontSize: 18, fontWeight: "700" },
-  subText: { color: TEXT_SECONDARY, marginTop: 4, fontSize: 12 },
+  title: { fontSize: 26, fontWeight: "900", color: "#EAF0FF" },
+  subtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "rgba(234,240,255,0.70)",
+    lineHeight: 18,
+  },
 
   search: {
     backgroundColor: BG,
@@ -229,7 +246,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // 섹션 카드 (정상 / 미갱신 공통)
   sectionCard: {
     backgroundColor: CARD_BG,
     borderRadius: 14,
@@ -237,7 +253,7 @@ const styles = StyleSheet.create({
     borderColor: CARD_BORDER,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 12, // 이 여백이 사실상의 "구분선" 역할
+    marginBottom: 12,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -245,24 +261,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
-  sectionTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  sectionCount: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-  },
+  sectionTitle: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: "700" },
+  sectionCount: { color: TEXT_SECONDARY, fontSize: 12 },
   sectionBody: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: CARD_BORDER,
     marginTop: 6,
   },
 
-  // 각 row
   row: {
-    paddingVertical: 6, // 컴팩트하게
+    paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: CARD_BORDER,
   },
@@ -278,19 +286,9 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 6,
   },
-  ceoText: {
-    color: TEXT_SECONDARY,
-    fontSize: 11,
-  },
-  serviceText: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  expiredCompanyText: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-  },
+  ceoText: { color: TEXT_SECONDARY, fontSize: 11 },
+  serviceText: { color: TEXT_SECONDARY, fontSize: 12, marginTop: 2 },
+  expiredCompanyText: { color: TEXT_SECONDARY, fontSize: 12 },
 
   center: { alignItems: "center", marginTop: 40 },
   loadingText: { color: TEXT_SECONDARY, marginTop: 8, fontSize: 13 },

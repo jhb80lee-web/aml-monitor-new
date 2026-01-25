@@ -1,7 +1,6 @@
 // constants/api.ts
 
-export const API_BASE_URL =
-  "https://orange-bread-2e13.jhb80lee.workers.dev";
+export const API_BASE_URL = "https://orange-bread-2e13.jhb80lee-793.workers.dev";
 
 /* =========================
  * KoFIU
@@ -19,14 +18,17 @@ export const KOFIU_RESTRICTED_LATEST_URL =
  * OFAC
  * ========================= */
 
-// OFAC SDN 최신
-export const OFAC_SDN_LATEST_URL =
-  `${API_BASE_URL}/ofac/sdn/latest`;
+// OFAC SDN 최신// OFAC
+export const OFAC_SDN_LATEST_URL = `${API_BASE_URL}/ofac/sdn/latest`;
+export const OFAC_SDN_HISTORY_URL = `${API_BASE_URL}/ofac/sdn/history`;
 
 /* =========================
  * UN
  * ========================= */
+// UN
+export const UN_LATEST_URL = `${API_BASE_URL}/un/sdn/latest`;
+export const UN_SDN_HISTORY_URL = `${API_BASE_URL}/un/sdn/history`;
 
-// UN 제재 리스트 최신
-export const UN_LATEST_URL =
-  `${API_BASE_URL}/un/sdn/latest`;
+// ✅ health 체크
+export const HEALTH_URL = `${API_BASE_URL}/health`;
+

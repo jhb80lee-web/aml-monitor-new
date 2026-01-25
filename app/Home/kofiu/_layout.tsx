@@ -12,6 +12,8 @@ export default function KofiuLayout() {
       screenOptions={{
         headerShown: false, // 👈 모든 KoFIU 화면에서 상단 헤더 숨기기
         contentStyle: { backgroundColor: BG },
+        animation: "none", // ✅ 전환 애니메이션 제거
+        gestureEnabled: false, // ✅ iOS 스와이프 뒤로가기 제스처 제거(원하면 삭제)
       }}
     >
       {/* /Home/kofiu/index.tsx */}

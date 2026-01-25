@@ -1,13 +1,8 @@
 // app/Home/ofac/history.tsx
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { OFAC_HISTORY_URL } from "../../../constants/api";
+import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { API_BASE_URL } from "../../../constants/api";
+import BottomTabBar from "../../../components/BottomTabBar";
 
 type SnapshotRaw = {
   updatedAt: string;
@@ -34,9 +29,8 @@ type SnapshotView = {
 function formatSnapshotLabel(updatedAt: string, index: number) {
   if (!updatedAt) return `스냅샷 ${index + 1}`;
   const d = new Date(updatedAt);
-  if (isNaN(d.getTime())) {
-    return `${updatedAt} 기준`;
-  }
+  if (isNaN(d.getTime())) return `${updatedAt} 기준`;
+
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
@@ -55,41 +49,44 @@ export default function OfacHistoryScreen() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(OFAC_HISTORY_URL);
-if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
+      const res = await fetch(`${API_BASE_URL}/ofac/sdn/history`);
+      if (!res.ok) throw new Error(`OFAC 히스토리 조회 실패 (HTTP ${res.status})`);
 
       const json = (await res.json()) as HistoryResponseRaw;
-      console.log("OFAC history 응답:", json);
+const raw = json?.snapshots ?? [];
 
-      const raw = json.snapshots || [];
+// ✅ 최신(updatedAt) 내림차순 정렬 (최신이 위로)
+const sorted = [...raw].sort((a, b) => {
+  const ta = new Date(a.updatedAt).getTime();
+  const tb = new Date(b.updatedAt).getTime();
 
-      // 연속 스냅샷 기준 증감 계산
-      const views: SnapshotView[] = raw.map((s, idx) => {
-        const prev = idx > 0 ? raw[idx - 1] : null;
+  // updatedAt이 이상한 값일 경우도 안전 처리
+  const na = Number.isFinite(ta) ? ta : 0;
+  const nb = Number.isFinite(tb) ? tb : 0;
 
-        const totalPrev = prev ? prev.total ?? 0 : s.total ?? 0;
-        const totalDiff = (s.total ?? 0) - totalPrev;
+  return nb - na;
+});
 
-        const krNow = s.totalKorea ?? 0;
-        const krPrev = prev ? prev.totalKorea ?? 0 : krNow;
-        const krDiff = krNow - krPrev;
+const views: SnapshotView[] = sorted.map((s, idx) => {
+  const prev = sorted[idx + 1]; // ✅ 다음(더 과거) 스냅샷
+  const kr = s.totalKorea ?? 0;
+  const prevKr = prev?.totalKorea ?? 0;
 
-        return {
-          label: formatSnapshotLabel(s.updatedAt, idx),
-          totalCount: s.total ?? 0,
-          krCount: krNow,
-          totalDiff,
-          krDiff,
-          addedCount: s.addedCount ?? 0,
-          removedCount: s.removedCount ?? 0,
-        };
-      });
+  return {
+    label: formatSnapshotLabel(s.updatedAt, idx),
+    totalCount: s.total ?? 0,
+    krCount: kr,
+    totalDiff: (s.total ?? 0) - (prev?.total ?? 0),
+    krDiff: kr - prevKr,
+    addedCount: s.addedCount ?? 0,
+    removedCount: s.removedCount ?? 0,
+  };
+});
 
-      setSnapshots(views);
-    } catch (e) {
-      console.log("OFAC history fetch 에러:", e);
-      setError("히스토리 데이터를 불러오지 못했습니다.");
+setSnapshots(views);
+
+    } catch (e: any) {
+      setError(e?.message ?? "OFAC 히스토리 조회 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -100,210 +97,131 @@ if (!res.ok) throw new Error(`HTTP ${res.status}`);
   }, [loadHistory]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollInner}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 헤더 */}
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.appName}>AML MONITOR</Text>
           <Text style={styles.title}>OFAC 히스토리</Text>
-          <Text style={styles.subtitle}>
-            스냅샷별 제재 대상 수와{"\n"}대한민국 관련 대상 증감 추이를 확인합니다.
-          </Text>
+          <Text style={styles.subtitle}>OFAC SDN 스냅샷 변동을 확인합니다.</Text>
         </View>
 
-        {/* 👉 화살표 / 새로고침 네비 영역 제거됨 */}
-
-        {/* 상태 */}
         {loading && (
-          <View style={styles.infoCard}>
-            <Text style={styles.infoText}>
-              히스토리 데이터를 불러오는 중입니다…
-            </Text>
+          <View style={styles.card}>
+            <Text style={styles.cardSub}>불러오는 중…</Text>
           </View>
         )}
 
-        {error && !loading && (
-          <View style={[styles.infoCard, styles.errorCard]}>
-            <Text style={styles.errorText}>{error}</Text>
+        {!loading && error && (
+          <View style={styles.card}>
+            <Text style={[styles.cardSub, { color: "#FF6B6B" }]}>{error}</Text>
           </View>
         )}
 
-        {/* 타임라인 */}
         {!loading && !error && (
-          <View style={styles.timelineCard}>
-            {snapshots.map((s, idx) => (
-              <View key={`${s.label}-${idx}`} style={styles.timelineRow}>
-                <View style={styles.timelineLeft}>
-                  <View className="bulletOuter" style={styles.bulletOuter}>
-                    <View style={styles.bulletInner} />
-                  </View>
-                  {idx !== snapshots.length - 1 && (
-                    <View style={styles.bulletLine} />
-                  )}
-                </View>
+          <View style={styles.card}>
+            {snapshots.map((s, idx) => {
+              const isLast = idx === snapshots.length - 1;
 
-                <View style={styles.timelineRight}>
+              return (
+                <View key={idx} style={[styles.rowWrap, isLast && { borderBottomWidth: 0, paddingBottom: 2 }]}>
                   <Text style={styles.snapshotLabel}>{s.label}</Text>
 
                   <View style={styles.snapshotRow}>
-                    <View style={styles.snapshotBox}>
-                      <Text style={styles.snapshotTitle}>전체 대상 수</Text>
-                      <Text style={styles.snapshotNumber}>
-                        {s.totalCount.toLocaleString()}건
-                      </Text>
+                    <View style={styles.rowCard}>
+                      <Text style={styles.rowCardTitle}>전체</Text>
+                      <Text style={styles.rowCardValue}>{s.totalCount.toLocaleString()}</Text>
                       <Text
                         style={[
-                          styles.snapshotDiff,
-                          s.totalDiff > 0 && styles.diffUp,
-                          s.totalDiff < 0 && styles.diffDown,
+                          styles.rowCardDiff,
+                          s.totalDiff > 0 ? styles.diffUp : s.totalDiff < 0 ? styles.diffDown : null,
                         ]}
                       >
-                        {s.totalDiff >= 0 ? "+" : ""}
-                        {s.totalDiff.toLocaleString()}건
+                        {s.totalDiff > 0 ? `+${s.totalDiff}` : `${s.totalDiff}`}
                       </Text>
                     </View>
 
-                    <View style={styles.snapshotBox}>
-                      <Text style={styles.snapshotTitle}>대한민국 관련</Text>
-                      <Text style={styles.snapshotNumber}>
-                        {s.krCount.toLocaleString()}건
-                      </Text>
+                    <View style={styles.rowCard}>
+                      <Text style={styles.rowCardTitle}>대한민국</Text>
+                      <Text style={styles.rowCardValue}>{s.krCount.toLocaleString()}</Text>
                       <Text
-                        style={[
-                          styles.snapshotDiff,
-                          s.krDiff > 0 && styles.diffUp,
-                          s.krDiff < 0 && styles.diffDown,
-                        ]}
+                        style={[styles.rowCardDiff, s.krDiff > 0 ? styles.diffUp : s.krDiff < 0 ? styles.diffDown : null]}
                       >
-                        {s.krDiff >= 0 ? "+" : ""}
-                        {s.krDiff.toLocaleString()}건
+                        {s.krDiff > 0 ? `+${s.krDiff}` : `${s.krDiff}`}
                       </Text>
                     </View>
                   </View>
 
-                  {/* 필요 시 추가/삭제 텍스트 표시 가능 */}
-                  {/* <Text style={styles.smallNote}>
-                    신규 {s.addedCount.toLocaleString()}건 / 삭제{" "}
-                    {s.removedCount.toLocaleString()}건
-                  </Text> */}
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaText}>
+                      추가 {s.addedCount.toLocaleString()} · 제거 {s.removedCount.toLocaleString()}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
 
-            {snapshots.length === 0 && (
-              <Text style={styles.emptyText}>
-                아직 저장된 히스토리 스냅샷이 없습니다.
-              </Text>
-            )}
+            {snapshots.length === 0 && <Text style={styles.emptyText}>아직 저장된 히스토리 스냅샷이 없습니다.</Text>}
           </View>
         )}
       </ScrollView>
+
+      <BottomTabBar />
     </SafeAreaView>
   );
 }
 
-const CARD_BG = "#05060B";
-const CARD_BORDER = "#262A3D";
-const TEXT_PRIMARY = "#F5F7FF";
-const TEXT_SECONDARY = "#A4ACC5";
-const ACCENT = "#4F8CFF";
-const ERROR = "#FF6B6B";
-const UP = "#3CCB7F";
-const DOWN = "#FF6B6B";
-
+/**
+ * ✅ ofac/index.tsx 와 1:1로 맞춘 스타일 (배경/헤더/카드 톤 동일)
+ */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#020308" },
-  scrollInner: { paddingHorizontal: 20, paddingBottom: 40 },
-  header: { paddingTop: 18, paddingBottom: 12 },
-  appName: {
-    fontSize: 12,
-    letterSpacing: 3,
-    color: TEXT_SECONDARY,
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: TEXT_PRIMARY,
-    marginBottom: 4,
-  },
-  subtitle: { fontSize: 13, color: TEXT_SECONDARY, lineHeight: 18 },
+  safe: { flex: 1, backgroundColor: "#020617" },
+  scroll: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 130 },
 
-  infoCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
-    padding: 12,
-    marginBottom: 12,
-  },
-  infoText: { fontSize: 13, color: TEXT_SECONDARY },
-  errorCard: { borderColor: ERROR },
-  errorText: { fontSize: 13, color: ERROR },
+  header: { paddingBottom: 10 },
+  appName: { fontSize: 11, letterSpacing: 3, color: "rgba(234,240,255,0.55)", marginBottom: 6 },
+  title: { fontSize: 26, fontWeight: "800", color: "#EAF0FF" },
+  subtitle: { marginTop: 6, fontSize: 13, color: "rgba(234,240,255,0.70)", lineHeight: 18 },
 
-  timelineCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
+  // ✅ index.tsx card 톤
+  card: {
+    marginTop: 12,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: "rgba(148, 163, 184, 0.12)",
   },
-  timelineRow: { flexDirection: "row", paddingBottom: 14 },
-  timelineLeft: { width: 24, alignItems: "center" },
-  bulletOuter: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: ACCENT,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 3,
+  cardSub: { color: "rgba(234,240,255,0.65)", fontSize: 12, marginTop: 4 },
+
+  // 히스토리 각 스냅샷 블록 (card 내부에서 구분선)
+  rowWrap: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.10)",
   },
-  bulletInner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: ACCENT,
-  },
-  bulletLine: {
-    flex: 1,
-    width: 2,
-    backgroundColor: "#1B1E2C",
-    marginTop: 2,
-  },
-  timelineRight: { flex: 1, paddingLeft: 6 },
-  snapshotLabel: { fontSize: 12, color: TEXT_SECONDARY, marginBottom: 6 },
+
+  snapshotLabel: { fontSize: 12, color: "rgba(234,240,255,0.65)", marginBottom: 10 },
+
   snapshotRow: { flexDirection: "row", gap: 10 },
-  snapshotBox: {
+
+  // ✅ index.tsx row 톤
+  rowCard: {
     flex: 1,
     padding: 10,
-    borderRadius: 10,
-    backgroundColor: "#070914",
+    borderRadius: 14,
+    backgroundColor: "rgba(15, 23, 42, 0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.10)",
   },
-  snapshotTitle: { fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4 },
-  snapshotNumber: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: TEXT_PRIMARY,
-    marginBottom: 2,
-  },
-  snapshotDiff: { fontSize: 11, color: TEXT_SECONDARY },
-  diffUp: { color: UP },
-  diffDown: { color: DOWN },
-  emptyText: {
-    paddingVertical: 10,
-    fontSize: 12,
-    textAlign: "center",
-    color: TEXT_SECONDARY,
-  },
-  smallNote: {
-    marginTop: 4,
-    fontSize: 11,
-    color: TEXT_SECONDARY,
-  },
+  rowCardTitle: { fontSize: 12, color: "rgba(234,240,255,0.65)", marginBottom: 4 },
+  rowCardValue: { fontSize: 18, fontWeight: "900", color: "#EAF0FF", marginBottom: 2 },
+  rowCardDiff: { fontSize: 11, color: "rgba(234,240,255,0.65)" },
+
+  diffUp: { color: "#3CCB7F" },
+  diffDown: { color: "#FF6B6B" },
+
+  metaRow: { marginTop: 10 },
+  metaText: { fontSize: 11, color: "rgba(234,240,255,0.55)" },
+
+  emptyText: { paddingVertical: 10, fontSize: 12, textAlign: "center", color: "rgba(234,240,255,0.55)" },
 });

@@ -1,6 +1,6 @@
 // app/Home/un/index.tsx
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -9,14 +9,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { API_BASE_URL } from "../../../constants/api";
+import BottomTabBar from "../../../components/BottomTabBar";
 
 type Person = {
   id: string;
   uid: string;
-  type: string; // "Individual" | "Entity"
+  type: string;
   name: string;
   birth: string;
   country: string;
@@ -31,53 +34,12 @@ type UnLatestApi = {
   data: Person[];
 };
 
-type UnView = {
-  lastUpdated: string;
-  totalCount: number;
-  krCount: number;
-  krList: Person[];
-};
-
-// 🔹 UN isKorea와 맞게 한국 관련 키워드
-const KOREA_KEYWORDS = [
-  "south korea",
-  "republic of korea",
-  "korea, south",
-  "south korean",
-];
-
-function escapeRegExp(str: string) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function renderHighlighted(text?: string) {
-  if (!text) return null;
-  const lowerKeywords = KOREA_KEYWORDS.map((k) => k.toLowerCase());
-  const regex = new RegExp(
-    `(${lowerKeywords.map(escapeRegExp).join("|")})`,
-    "gi"
-  );
-
-  const parts = text.split(regex);
-
-  return parts.map((part, idx) => {
-    const lower = part.toLowerCase();
-    const shouldHighlight = lowerKeywords.includes(lower);
-    return (
-      <Text
-        key={idx}
-        style={shouldHighlight ? styles.highlightText : undefined}
-      >
-        {part}
-      </Text>
-    );
-  });
-}
-
 export default function UnScreen() {
-  const [data, setData] = useState<UnView | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [json, setJson] = useState<UnLatestApi | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [keyword, setKeyword] = useState("");
   const [selected, setSelected] = useState<Person | null>(null);
 
   const loadLatest = useCallback(async () => {
@@ -85,25 +47,13 @@ export default function UnScreen() {
       setLoading(true);
       setError(null);
 
-const res = await fetch(`${API_BASE_URL}/un/sdn/latest`);
+      const res = await fetch(`${API_BASE_URL}/un/sdn/latest`);
+      if (!res.ok) throw new Error(`UN 최신 데이터 조회 실패 (HTTP ${res.status})`);
 
-if (!res.ok) {
-  throw new Error(
-    `UN 제재 리스트 조회에 실패했습니다. (HTTP ${res.status})`
-  );
-}
-      const json = (await res.json()) as UnLatestApi;
-      const krList = (json.data || []).filter((p) => p.isKorea);
-
-      setData({
-        lastUpdated: json.updatedAt,
-        totalCount: json.total,
-        krCount: krList.length,
-        krList,
-      });
+      const data = (await res.json()) as UnLatestApi;
+      setJson(data);
     } catch (e: any) {
-      console.log("UN latest fetch 에러:", e);
-      setError(e?.message ?? "UN 제재 리스트 조회 중 오류가 발생했습니다.");
+      setError(e?.message ?? "UN 최신 데이터 조회 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -113,417 +63,226 @@ if (!res.ok) {
     loadLatest();
   }, [loadLatest]);
 
+  const krList = useMemo(() => {
+    const list = (json?.data ?? []).filter((p) => p.isKorea);
+    const q = keyword.trim().toLowerCase();
+    if (!q) return list;
+
+    return list.filter((p) => {
+      const text = `${p.name ?? ""} ${p.birth ?? ""} ${p.country ?? ""}`.toLowerCase();
+      return text.includes(q);
+    });
+  }, [json, keyword]);
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollInner}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 상단 타이틀 */}
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.appName}>AML MONITOR</Text>
           <Text style={styles.title}>UN 제재 리스트</Text>
           <Text style={styles.subtitle}>
-            UN 안보리 Consolidated Sanctions List 기준으로{"\n"}
-            전체 / 대한민국 관련 제재 현황을 요약해서 보여줍니다.
+            UN Consolidated Sanctions List 기준으로{"\n"}
+            대한민국 관련 항목만 요약해서 보여줍니다.
           </Text>
+
+          <View style={styles.navRow}>
+            <View style={{ flex: 1 }} />
+            <Link href="/Home/un/history" asChild>
+              <Pressable style={styles.historyBtn}>
+                <Text style={styles.historyBtnText}>히스토리 보기</Text>
+              </Pressable>
+            </Link>
+          </View>
         </View>
 
-        {/* 상단 네비: 오른쪽에만 버튼형 "히스토리" */}
-        <View style={styles.navRow}>
-          <View style={{ flex: 1 }} />
-          <Link href="/Home/un/history" style={styles.historyButton}>
-            <Text style={styles.historyButtonText}>히스토리 보기</Text>
-          </Link>
-        </View>
-
-        {/* 상태 영역 */}
-        {loading && (
-          <View style={styles.infoCard}>
-            <ActivityIndicator />
-            <Text style={[styles.infoText, { marginTop: 6 }]}>
-              실시간 데이터를 불러오는 중입니다…
-            </Text>
-          </View>
-        )}
-
-        {error && !loading && (
-          <View style={[styles.infoCard, styles.errorCard]}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable onPress={loadLatest} style={styles.retryBtn}>
-              <Text style={styles.retryText}>다시 시도</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* 실제 데이터 */}
-        {data && !loading && !error && (
-          <>
-            {/* 요약 카드 */}
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>
-                기준일시: {data.lastUpdated}
+        {/* Summary */}
+        <View style={styles.card}>
+          {loading ? (
+            <View style={styles.centerRow}>
+              <ActivityIndicator />
+              <Text style={styles.cardSub}>불러오는 중…</Text>
+            </View>
+          ) : error ? (
+            <Text style={[styles.cardSub, { color: "#FF6B6B" }]}>{error}</Text>
+          ) : (
+            <>
+              <Text style={styles.cardTitle}>요약</Text>
+              <Text style={styles.cardSub}>기준일: {(json?.updatedAt ? String(json.updatedAt).slice(0, 10) : "-")}
               </Text>
               <View style={styles.summaryRow}>
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryTitle}>전체 UN 제재 대상</Text>
-                  <Text style={styles.summaryNumber}>
-                    {data.totalCount.toLocaleString()}건
-                  </Text>
-                  <Text style={styles.summaryDiff}>변동 정보 없음</Text>
-                </View>
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryTitle}>대한민국 관련</Text>
-                  <Text style={styles.summaryNumber}>
-                    {data.krCount.toLocaleString()}건
-                  </Text>
-                  <Text style={styles.summaryDiff}>변동 정보 없음</Text>
-                </View>
+                <Text style={styles.summaryLabel}>전체</Text>
+                <Text style={styles.summaryValue}>{json?.total?.toLocaleString() ?? 0}건</Text>
               </View>
-            </View>
-
-            {/* 대한민국 관련 리스트 (이름만) */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  대한민국 관련 UN 제재 대상
-                </Text>
-                <Text style={styles.sectionCaption}>
-                  {data.krCount.toLocaleString()}건
-                </Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>대한민국 관련</Text>
+                <Text style={styles.summaryValue}>{krList.length.toLocaleString()}건</Text>
               </View>
+            </>
+          )}
+        </View>
 
-              <View style={styles.sectionBody}>
-                {data.krCount === 0 && (
-                  <Text style={styles.emptyText}>
-                    현재 대한민국 관련으로 식별된 대상이 없습니다.
-                  </Text>
-                )}
+        {/* Search */}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={18} color="#8BA4D6" />
+          <TextInput
+            value={keyword}
+            onChangeText={setKeyword}
+            placeholder="이름/키워드 검색"
+            placeholderTextColor="#63708D"
+            style={styles.searchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {keyword.trim().length > 0 && (
+            <Pressable onPress={() => setKeyword("")} hitSlop={10}>
+              <Ionicons name="close-circle" size={20} color="#8BA4D6" />
+            </Pressable>
+          )}
+        </View>
 
-                {data.krList.map((p) => (
-                  <Pressable
-                    key={p.uid}
-                    onPress={() => setSelected(p)}
-                    style={({ pressed }) => [
-                      styles.personRow,
-                      pressed && styles.personRowPressed,
-                    ]}
-                  >
-                    <Text style={styles.personName}>{p.name}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          </>
-        )}
+        {/* List */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>대한민국 관련 리스트</Text>
+
+          {!loading && !error && krList.length === 0 && (
+            <Text style={styles.emptyText}>표시할 항목이 없습니다.</Text>
+          )}
+
+          {krList.map((p) => (
+            <Pressable
+              key={p.id}
+              onPress={() => setSelected(p)}
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.rowTitle}>{p.name}</Text>
+              <Text style={styles.rowSub}>
+                {p.birth ? `(${p.birth}) ` : ""}
+                {p.country ?? ""}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </ScrollView>
 
-      {/* 상세 모달 */}
-      <Modal
-        visible={!!selected}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelected(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            {selected && (
-              <>
-                <Text style={styles.modalName}>{selected.name}</Text>
-                <Text style={styles.modalField}>UID: {selected.uid}</Text>
-                <Text style={styles.modalField}>구분: {selected.type}</Text>
-                {selected.birth ? (
-                  <Text style={styles.modalField}>
-                    생년월일: {selected.birth}
-                  </Text>
-                ) : null}
-                {selected.country ? (
-                  <Text style={styles.modalField}>
-                    국가/주소: {selected.country}
-                  </Text>
-                ) : null}
+      <BottomTabBar />
 
-                {/* 🔹 한국 관련일 때만 UN 원문/코멘트 표시 + 하이라이트 */}
-                {selected.isKorea && (selected.remark || selected.fullText) ? (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>UN 원문</Text>
-                    {selected.remark ? (
-                      <>
-                        <Text style={styles.modalLabel}>
-                          설명(Comments)
-                        </Text>
-                        <Text style={styles.modalRemark}>
-                          {renderHighlighted(selected.remark)}
-                        </Text>
-                      </>
-                    ) : null}
-                    {selected.fullText ? (
-                      <>
-                        <Text style={styles.modalLabel}>전체 텍스트</Text>
-                        <Text style={styles.modalOriginal}>
-                          {renderHighlighted(selected.fullText)}
-                        </Text>
-                      </>
-                    ) : null}
-                  </View>
-                ) : null}
+      {/* Detail Modal */}
+      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
+        <Pressable style={styles.modalDim} onPress={() => setSelected(null)} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>{selected?.name}</Text>
+          <Text style={styles.modalSub}>
+            {selected?.birth ? `생년/식별: ${selected?.birth}\n` : ""}
+            국가: {selected?.country ?? "-"}
+          </Text>
 
-                <Pressable
-                  onPress={() => setSelected(null)}
-                  style={styles.modalCloseBtn}
-                >
-                  <Text style={styles.modalCloseText}>닫기</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
+          {!!selected?.remark && <Text style={styles.modalBody}>{selected.remark}</Text>}
+          {!!selected?.fullText && <Text style={styles.modalBody}>{selected.fullText}</Text>}
+
+          <Pressable onPress={() => setSelected(null)} style={styles.modalClose}>
+            <Text style={styles.modalCloseText}>닫기</Text>
+          </Pressable>
         </View>
       </Modal>
     </SafeAreaView>
   );
 }
 
-// ===== 스타일 =====
-const CARD_BG = "#05060B";
-const CARD_BORDER = "#262A3D";
-const TEXT_PRIMARY = "#F5F7FF";
-const TEXT_SECONDARY = "#A4ACC5";
-const ACCENT = "#4F8CFF";
-const ERROR = "#FF6B6B";
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020308",
-  },
-  scrollInner: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    paddingTop: 18,
-    paddingBottom: 12,
-  },
-  appName: {
-    fontSize: 12,
-    letterSpacing: 3,
-    color: TEXT_SECONDARY,
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: TEXT_PRIMARY,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: TEXT_SECONDARY,
-    lineHeight: 18,
-  },
-  navRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  historyButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+  safe: { flex: 1, backgroundColor: "#020617" },
+  scroll: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 130 },
+
+  header: { paddingBottom: 10 },
+  appName: { fontSize: 11, letterSpacing: 3, color: "rgba(234,240,255,0.55)", marginBottom: 6 },
+  title: { fontSize: 26, fontWeight: "800", color: "#EAF0FF" },
+  subtitle: { marginTop: 6, fontSize: 13, color: "rgba(234,240,255,0.70)", lineHeight: 18 },
+
+  navRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
+  historyBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: ACCENT,
-  },
-  historyButtonText: {
-    fontSize: 11,
-    color: "#050816",
-    fontWeight: "600",
-  },
-  infoCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
     borderWidth: 1,
-    borderColor: CARD_BORDER,
-    padding: 12,
-    marginBottom: 12,
-    alignItems: "center",
+    borderColor: "rgba(148, 163, 184, 0.14)",
   },
-  infoText: {
-    fontSize: 13,
-    color: TEXT_SECONDARY,
-  },
-  errorCard: {
-    borderColor: ERROR,
-  },
-  errorText: {
-    fontSize: 13,
-    color: ERROR,
-    marginBottom: 8,
-  },
-  retryBtn: {
-    marginTop: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: ERROR,
-  },
-  retryText: {
-    fontSize: 12,
-    color: "#000",
-    fontWeight: "600",
-  },
-  summaryCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
+  historyBtnText: { color: "#9CC2FF", fontWeight: "800", fontSize: 12 },
+
+  card: {
+    marginTop: 12,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    borderRadius: 18,
     padding: 14,
-    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.12)",
   },
-  summaryLabel: {
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    marginBottom: 8,
-  },
+  cardTitle: { color: "#EAF0FF", fontSize: 14, fontWeight: "900", marginBottom: 6 },
+  cardSub: { color: "rgba(234,240,255,0.65)", fontSize: 12, marginTop: 4 },
+  centerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+
   summaryRow: {
     flexDirection: "row",
-    gap: 12,
-  },
-  summaryBox: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: "#070914",
-  },
-  summaryTitle: {
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    marginBottom: 4,
-  },
-  summaryNumber: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: TEXT_PRIMARY,
-    marginBottom: 3,
-  },
-  summaryDiff: {
-    fontSize: 11,
-    color: TEXT_SECONDARY,
-  },
-  section: {
-    marginBottom: 18,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginBottom: 6,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: TEXT_PRIMARY,
-  },
-  sectionCaption: {
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-  },
-  sectionBody: {
-    backgroundColor: CARD_BG,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  personRow: {
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#1B1E2C",
-  },
-  personRowPressed: {
-    backgroundColor: "#0B1020",
-  },
-  personName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_PRIMARY,
-  },
-  emptyText: {
-    paddingVertical: 8,
-    textAlign: "center",
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148, 163, 184, 0.10)",
   },
-  modalCard: {
-    width: "80%",
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
+  summaryLabel: { color: "rgba(234,240,255,0.70)", fontSize: 12, fontWeight: "700" },
+  summaryValue: { color: "#EAF0FF", fontSize: 12, fontWeight: "900" },
+
+  searchWrap: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.78)",
     borderWidth: 1,
-    borderColor: CARD_BORDER,
-    padding: 16,
-  },
-  modalName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: TEXT_PRIMARY,
-    marginBottom: 8,
-  },
-  modalField: {
-    fontSize: 13,
-    color: TEXT_SECONDARY,
-    marginBottom: 4,
-  },
-  modalSection: {
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#262A3D",
-  },
-  modalSectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: TEXT_PRIMARY,
-    marginBottom: 4,
-  },
-  modalLabel: {
-    fontSize: 11,
-    color: TEXT_SECONDARY,
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  modalRemark: {
-    fontSize: 12,
-    color: TEXT_PRIMARY,
-    lineHeight: 18,
-  },
-  modalOriginal: {
-    fontSize: 11,
-    color: TEXT_SECONDARY,
-    lineHeight: 16,
-  },
-  highlightText: {
-    backgroundColor: "#facc15",
-    color: "#000",
-    fontWeight: "700",
-  },
-  modalCloseBtn: {
-    marginTop: 14,
-    alignSelf: "flex-end",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    borderColor: "rgba(148, 163, 184, 0.12)",
     borderRadius: 999,
-    backgroundColor: ACCENT,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  modalCloseText: {
-    fontSize: 12,
-    color: "#000",
-    fontWeight: "600",
+  searchInput: { flex: 1, color: "#EAF0FF", fontSize: 14, paddingVertical: 4 },
+
+  section: { marginTop: 16 },
+  sectionTitle: { color: "#EAF0FF", fontSize: 14, fontWeight: "900", marginBottom: 10 },
+  emptyText: { color: "rgba(234,240,255,0.55)", fontSize: 12 },
+
+  row: {
+    backgroundColor: "rgba(15, 23, 42, 0.72)",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.10)",
   },
+  rowTitle: { color: "#EAF0FF", fontSize: 14, fontWeight: "900", marginBottom: 4 },
+  rowSub: { color: "rgba(234,240,255,0.65)", fontSize: 12, lineHeight: 16 },
+
+  modalDim: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" },
+  modalCard: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    top: "20%",
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "rgba(15, 23, 42, 0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.14)",
+  },
+  modalTitle: { color: "#EAF0FF", fontSize: 16, fontWeight: "900", marginBottom: 6 },
+  modalSub: { color: "rgba(234,240,255,0.70)", fontSize: 12, lineHeight: 18 },
+  modalBody: { marginTop: 10, color: "rgba(234,240,255,0.65)", fontSize: 12, lineHeight: 18 },
+  modalClose: {
+    marginTop: 14,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#2B57D6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseText: { color: "#EAF0FF", fontSize: 14, fontWeight: "900" },
 });
