@@ -29,6 +29,11 @@ export const OFAC_SDN_HISTORY_URL = `${API_BASE_URL}/ofac/sdn/history`;
 export const UN_LATEST_URL = `${API_BASE_URL}/un/sdn/latest`;
 export const UN_SDN_HISTORY_URL = `${API_BASE_URL}/un/sdn/history`;
 
+/* =========================
+ * PEPs
+ * ========================= */
+
+export const CIA_PEPS_LATEST_URL = `${API_BASE_URL}/peps/cia/latest`;
+
 // ✅ health 체크
 export const HEALTH_URL = `${API_BASE_URL}/health`;
-

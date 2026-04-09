@@ -39,6 +39,9 @@ export default function UnScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ 검색창 UI 비활성화(숨김) — 로직은 유지
+  const SEARCH_DISABLED = true;
+
   const [keyword, setKeyword] = useState("");
   const [selected, setSelected] = useState<Person | null>(null);
 
@@ -65,6 +68,10 @@ export default function UnScreen() {
 
   const krList = useMemo(() => {
     const list = (json?.data ?? []).filter((p) => p.isKorea);
+
+    // ✅ 검색 비활성화면 무조건 전체 리스트
+    if (SEARCH_DISABLED) return list;
+
     const q = keyword.trim().toLowerCase();
     if (!q) return list;
 
@@ -72,7 +79,7 @@ export default function UnScreen() {
       const text = `${p.name ?? ""} ${p.birth ?? ""} ${p.country ?? ""}`.toLowerCase();
       return text.includes(q);
     });
-  }, [json, keyword]);
+  }, [json, keyword, SEARCH_DISABLED]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -108,7 +115,8 @@ export default function UnScreen() {
           ) : (
             <>
               <Text style={styles.cardTitle}>요약</Text>
-              <Text style={styles.cardSub}>기준일: {(json?.updatedAt ? String(json.updatedAt).slice(0, 10) : "-")}
+              <Text style={styles.cardSub}>
+                기준일: {(json?.updatedAt ? String(json.updatedAt).slice(0, 10) : "-")}
               </Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>전체</Text>
@@ -122,24 +130,26 @@ export default function UnScreen() {
           )}
         </View>
 
-        {/* Search */}
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color="#8BA4D6" />
-          <TextInput
-            value={keyword}
-            onChangeText={setKeyword}
-            placeholder="이름/키워드 검색"
-            placeholderTextColor="#63708D"
-            style={styles.searchInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {keyword.trim().length > 0 && (
-            <Pressable onPress={() => setKeyword("")} hitSlop={10}>
-              <Ionicons name="close-circle" size={20} color="#8BA4D6" />
-            </Pressable>
-          )}
-        </View>
+        {/* Search (DISABLED) */}
+        {!SEARCH_DISABLED && (
+          <View style={styles.searchWrap}>
+            <Ionicons name="search" size={18} color="#8BA4D6" />
+            <TextInput
+              value={keyword}
+              onChangeText={setKeyword}
+              placeholder="이름/키워드 검색"
+              placeholderTextColor="#63708D"
+              style={styles.searchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {keyword.trim().length > 0 && (
+              <Pressable onPress={() => setKeyword("")} hitSlop={10}>
+                <Ionicons name="close-circle" size={20} color="#8BA4D6" />
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {/* List */}
         <View style={styles.section}>

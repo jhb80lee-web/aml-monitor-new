@@ -40,19 +40,20 @@ export default function HomeLayout() {
           headerShown: false,
           contentStyle: { backgroundColor: APP_BG },
           animation: "none",
-          gestureEnabled: false,
+          gestureEnabled: true,
         }}
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="watchlist/index" />
-
-<Stack.Screen name="kofiu" />
+        <Stack.Screen name="kofiu" />
 
         <Stack.Screen name="ofac/index" />
         <Stack.Screen name="ofac/history" />
 
         <Stack.Screen name="un/index" />
         <Stack.Screen name="un/history" />
+
+        <Stack.Screen name="peps" />
 
         <Stack.Screen name="settings/index" />
       </Stack>

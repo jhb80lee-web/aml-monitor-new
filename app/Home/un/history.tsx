@@ -1,6 +1,7 @@
 // app/Home/un/history.tsx
 import React, { useCallback, useEffect, useState } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { UN_SDN_HISTORY_URL } from "../../../constants/api";
 import { fetchJson } from "../../../constants/fetchJson";
 import BottomTabBar from "../../../components/BottomTabBar";
@@ -41,6 +42,7 @@ function formatSnapshotLabel(updatedAt: string, index: number) {
 }
 
 export default function UnHistoryScreen() {
+  const router = useRouter();
   const [snapshots, setSnapshots] = useState<SnapshotView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +96,18 @@ export default function UnHistoryScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
+          <Pressable
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+              router.replace("/Home/un" as any);
+            }}
+            style={styles.backBtn}
+          >
+            <Text style={styles.backBtnText}>UN 목록</Text>
+          </Pressable>
           <Text style={styles.appName}>AML MONITOR</Text>
           <Text style={styles.title}>UN 히스토리</Text>
           <Text style={styles.subtitle}>UN 제재 리스트 스냅샷 변동을 확인합니다.</Text>
@@ -186,6 +200,17 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 130 },
 
   header: { paddingBottom: 10 },
+  backBtn: {
+    alignSelf: "flex-start",
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.14)",
+  },
+  backBtnText: { color: "#9CC2FF", fontWeight: "800", fontSize: 12 },
   appName: { fontSize: 11, letterSpacing: 3, color: "rgba(234,240,255,0.55)", marginBottom: 6 },
   title: { fontSize: 26, fontWeight: "800", color: "#EAF0FF" },
   subtitle: { marginTop: 6, fontSize: 13, color: "rgba(234,240,255,0.70)", lineHeight: 18 },

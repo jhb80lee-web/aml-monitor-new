@@ -9,7 +9,7 @@ type Props = {
 };
 
 type Tab = {
-  key: "watchlist" | "kofiu" | "ofac" | "un" | "settings";
+  key: "watchlist" | "kofiu" | "ofac" | "un" | "peps" | "settings";
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   href: string;
@@ -44,6 +44,13 @@ const TABS: Tab[] = [
     icon: "globe-outline",
     href: "/Home/un",
     isActive: (p) => p.startsWith("/Home/un"),
+  },
+  {
+    key: "peps",
+    label: "PEPs",
+    icon: "id-card-outline",
+    href: "/Home/peps",
+    isActive: (p) => p.startsWith("/Home/peps"),
   },
   {
     key: "settings",
@@ -116,7 +123,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   tabItem: {
-    width: 66, // ✅ 5개 탭 대응
+    flex: 1,
+    maxWidth: 60,
     height: 54,
     borderRadius: 18,
     alignItems: "center",

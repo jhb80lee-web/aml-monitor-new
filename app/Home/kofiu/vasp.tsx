@@ -1,7 +1,9 @@
 // app/Home/kofiu/vasp.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -37,6 +39,7 @@ type VaspApiResponse = {
 };
 
 export default function VaspScreen() {
+  const router = useRouter();
   const [normal, setNormal] = useState<VaspItem[]>([]);
   const [expired, setExpired] = useState<VaspExpiredItem[]>([]);
   const [meta, setMeta] = useState({
@@ -123,6 +126,18 @@ export default function VaspScreen() {
       >
         {/* ✅ 상단 헤더 (KoFIU 홈과 동일 톤) */}
         <View style={styles.header}>
+          <Pressable
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+              router.replace("/Home/kofiu" as any);
+            }}
+            style={styles.backBtn}
+          >
+            <Text style={styles.backBtnText}>KoFIU 목록</Text>
+          </Pressable>
           <Text style={styles.appName}>AML MONITOR</Text>
           <Text style={styles.title}>가상자산사업자 신고현황</Text>
 
@@ -220,6 +235,17 @@ const styles = StyleSheet.create({
 listLoading: { paddingVertical: 24, alignItems: "center" },
   // ✅ (추가) KoFIU/OFAC/UN과 동일한 헤더 톤
   header: { paddingBottom: 10 },
+  backBtn: {
+    alignSelf: "flex-start",
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.14)",
+  },
+  backBtnText: { color: "#9CC2FF", fontWeight: "800", fontSize: 12 },
   appName: {
     fontSize: 11,
     letterSpacing: 3,
