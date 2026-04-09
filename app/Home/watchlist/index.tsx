@@ -22,6 +22,7 @@ type BaseEntry = {
   uid?: string;
   type?: string;
   name: string;
+  rawText?: string;
   birth?: string;
   country?: string;
   isKorea?: boolean;
@@ -49,6 +50,8 @@ type VaspLatestResponse = {
   normal?: BaseEntry[];
   expired?: BaseEntry[];
 };
+
+const FUZZY_MATCH_THRESHOLD = 0.9;
 
 // South Korea 판별 (UN/OFAC 공통)
 function isSouthKoreaEntry(entry: BaseEntry): boolean {
@@ -95,6 +98,182 @@ function normalizeForSearch(s: string) {
     .replace(NON_WORD_RE, ""); // 공백/특수문자 제거
 }
 
+function splitRawTerms(value: string) {
+  return String(value ?? "")
+    .split(/[\s,./()\-_[\]{}]+/g)
+    .map((part) => normalizeForSearch(part))
+    .filter(Boolean);
+}
+
+function buildSearchCandidates(values: (string | undefined)[]) {
+  const out = new Set<string>();
+
+  for (const value of values) {
+    const full = normalizeForSearch(value ?? "");
+    if (full) out.add(full);
+
+    const terms = splitRawTerms(value ?? "");
+    for (const term of terms) {
+      if (term) out.add(term);
+    }
+  }
+
+  return [...out];
+}
+
+function buildBigramCounts(value: string) {
+  const counts = new Map<string, number>();
+  if (value.length < 2) return counts;
+
+  for (let i = 0; i < value.length - 1; i += 1) {
+    const key = value.slice(i, i + 2);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+function diceCoefficient(a: string, b: string) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+
+  const aCounts = buildBigramCounts(a);
+  const bCounts = buildBigramCounts(b);
+  let overlap = 0;
+
+  for (const [key, countA] of aCounts.entries()) {
+    const countB = bCounts.get(key) ?? 0;
+    overlap += Math.min(countA, countB);
+  }
+
+  return (2 * overlap) / ((a.length - 1) + (b.length - 1));
+}
+
+function isFuzzyCandidateMatch(query: string, candidate: string, threshold = FUZZY_MATCH_THRESHOLD) {
+  if (!query || !candidate) return false;
+  if (candidate.includes(query) || query.includes(candidate)) return true;
+
+  if (query.length < 3 || candidate.length < 3) {
+    return false;
+  }
+
+  return diceCoefficient(query, candidate) >= threshold;
+}
+
+function createSearchMatcher(rawQuery: string, threshold = FUZZY_MATCH_THRESHOLD) {
+  const query = normalizeForSearch(rawQuery);
+
+  return (values: (string | undefined)[]) => {
+    const candidates = buildSearchCandidates(values);
+    return candidates.some((candidate) =>
+      isFuzzyCandidateMatch(query, candidate, threshold)
+    );
+  };
+}
+
+function formatRestrictedName(value?: string) {
+  let t = String(value || "")
+    .replace(/\r/g, " ")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!t) return "-";
+
+  t = t.replace(/^\d+\.\s*/, "").trim();
+
+  const hardCutPatterns = [
+    /\s*;\s*(?=DOB\b|alt\.\s*DOB\b|POB\b|nationality\b|citizen\b|Gender\b|Passport\b|National ID\b)/i,
+    /\s*;\s*(?=Business Registration Number\b|Registration Number\b|Tax ID\b|Company Number\b)/i,
+    /\s*;\s*(?=Website\b|SWIFT\/BIC\b|Organization Established Date\b|Target Type\b)/i,
+    /\s*\(\s*(?=a\.k\.a\.?\b|aka\b|f\.k\.a\.?\b|formerly known as\b|d\.b\.a\.?\b|trading as\b|linked to\b|linked with\b)/i,
+    /\.\s*(?=Identification Number\b|Taken part\b|Maintained by\b|Managed by\b|Operated by\b|Owned by\b|Run by\b|Affiliated with\b|Located at\b|Located in\b)/i,
+  ];
+
+  for (const re of hardCutPatterns) {
+    const m = t.match(re);
+    if (m && m.index != null) {
+      t = t.slice(0, m.index).trim();
+    }
+  }
+
+  t = t
+    .replace(
+      /\s*\((?:a\.k\.a\.?\b|aka\b|f\.k\.a\.?\b|formerly known as\b|d\.b\.a\.?\b|trading as\b|linked to\b|linked with\b)[^)]*\)\s*$/gi,
+      ""
+    )
+    .replace(/(?:\s*\[[^\]]+\]\s*\.?)+$/g, "")
+    .replace(/\s*\((?:individual|entity|vessel|aircraft)\)\s*$/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const corpSuffixRe =
+    /^(?:llc|l\.l\.c\.|limited|ltd|l\.t\.d\.|inc|inc\.|incorporated|corp|corp\.|corporation|co|co\.|company|plc|p\.l\.c\.|sa|s\.a\.|ag|gmbh|pte|pte\.|lp|l\.p\.|llp|l\.l\.p\.|nv|n\.v\.|spa|s\.p\.a\.)$/i;
+  const addressLeadRe =
+    /^(?:\d|p\.?\s*o\.?\s*box\b|post office box\b|room\b|suite\b|ste\.?\b|floor\b|building\b|bldg\.?\b|house\b|apartment\b|apt\.?\b|office\b|unit\b|no\.?\b|street\b|st\.?\b|road\b|rd\.?\b|avenue\b|ave\.?\b|boulevard\b|blvd\.?\b|lane\b|ln\.?\b|drive\b|dr\.?\b|parkway\b|pkwy\b|way\b|plaza\b|tower\b|center\b|centre\b|highway\b|hwy\b)/i;
+  const locationLikeRe =
+    /^(?:[A-Z][A-Za-z.'-]*|[A-Z]{2,})(?:\s+(?:[A-Z][A-Za-z.'-]*|[A-Z]{2,})){0,5}$/;
+  const nameHasEntityKwRe =
+    /\b(?:llc|limited|ltd|inc|corp|corporation|company|companies|group|groups|foundation|foundations|fund|funds|bank|banks|exchange|exchanges|telecommunication|telecommunications|communication|communications|trading|investment|investments|holding|holdings|organization|organizations|enterprise|enterprises|service|services|industry|industries|committee|bureau|agency|administration|center|centre|association|trust|trusts|movement|movements|front|army|network|networks|telephone|telephones|remittance|remittances)\b/i;
+
+  const commaParts = t.split(/\s*,\s*/).filter(Boolean);
+  const prefixBeforeComma = commaParts[0] || "";
+  const prefixTokenCount = prefixBeforeComma.trim().split(/\s+/).filter(Boolean).length;
+  const secondCommaPart = (commaParts[1] || "").trim();
+  const secondIsCorpSuffix = corpSuffixRe.test(secondCommaPart);
+  const secondLooksAddress = addressLeadRe.test(secondCommaPart) || /\d/.test(secondCommaPart);
+  const secondHasEntityKw = nameHasEntityKwRe.test(secondCommaPart);
+  const secondLooksPersonName =
+    !!secondCommaPart &&
+    !secondIsCorpSuffix &&
+    !secondLooksAddress &&
+    !secondHasEntityKw &&
+    /^[A-Z][A-Za-z' .-]+(?:\s+[A-Z][A-Za-z' .-]+){0,8}$/.test(secondCommaPart);
+  const looksLikePerson =
+    /^[A-Z][A-Z' .-]+,\s*[A-Z]/.test(t) &&
+    prefixTokenCount > 0 &&
+    prefixTokenCount <= 4 &&
+    !nameHasEntityKwRe.test(prefixBeforeComma) &&
+    secondLooksPersonName;
+  if (looksLikePerson) {
+    if (commaParts.length > 2) {
+      t = `${commaParts[0]}, ${commaParts[1]}`.trim();
+    }
+  } else {
+    const semiParts = t.split(/\s*;\s*/).filter(Boolean);
+    if (semiParts.length > 1) {
+      t = semiParts[0].trim();
+    }
+
+    const nonPersonCommaParts = t.split(/\s*,\s*/).filter(Boolean);
+    if (nonPersonCommaParts.length > 1) {
+      const kept = [nonPersonCommaParts[0]];
+      for (let i = 1; i < nonPersonCommaParts.length; i += 1) {
+        const seg = nonPersonCommaParts[i].trim();
+        const remainCount = nonPersonCommaParts.length - i - 1;
+        if (!seg) continue;
+
+        if (corpSuffixRe.test(seg)) {
+          kept.push(seg);
+          continue;
+        }
+
+        if (addressLeadRe.test(seg) || /\d/.test(seg)) break;
+
+        const isLocationLike = locationLikeRe.test(seg) && !nameHasEntityKwRe.test(seg);
+        if (isLocationLike && (remainCount >= 1 || nameHasEntityKwRe.test(kept.join(", ")))) break;
+
+        kept.push(seg);
+      }
+      t = kept.join(", ").trim();
+    }
+  }
+
+  t = t.replace(/[.;,:(\s]+$/g, "").trim();
+  return t || "-";
+}
+
 export default function WatchlistSearchScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
@@ -104,11 +283,9 @@ export default function WatchlistSearchScreen() {
   const [query, setQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [results, setResults] = useState<SearchResultBySource>(makeEmptyResults);
-  const [updatedAt, setUpdatedAt] = useState<Partial<Record<SourceKey, string>>>(
-    {}
-  );
 
   const totalCount =
     results.vasp.length +
@@ -123,8 +300,8 @@ export default function WatchlistSearchScreen() {
     setQuery("");
     setHasSearched(false);
     setLoading(false);
+    setErrorMessage("");
     setResults(makeEmptyResults());
-    setUpdatedAt({});
 
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -154,6 +331,7 @@ export default function WatchlistSearchScreen() {
     try {
       setHasSearched(true);
       setLoading(true);
+      setErrorMessage("");
       Keyboard.dismiss();
 
       const [vaspRes, restrictedRes, ofacRes, unRes] = await Promise.all([
@@ -166,7 +344,7 @@ fetch(`${API_BASE_URL}/un/sdn/latest`).then((r) => r.json()),
       if (myToken !== searchTokenRef.current) return;
 
       // ✅ 공백/특수문자/대소문자 무시 검색 키
-      const q = normalizeForSearch(trimmed);
+      const matches = createSearchMatcher(trimmed);
 
       const nextResults: SearchResultBySource = {
         vasp: [],
@@ -186,10 +364,7 @@ fetch(`${API_BASE_URL}/un/sdn/latest`).then((r) => r.json()),
       }));
 
       nextResults.vasp = vaspCombined.filter((item) => {
-        const text = normalizeForSearch(
-          `${item.service ?? ""} ${item.company ?? ""} ${item.ceo ?? ""}`
-        );
-        return text.includes(q);
+        return matches([item.service, item.company, item.ceo]);
       });
 
       // ✅ restricted/ofac/un은 data 배열에서 꺼내기
@@ -199,39 +374,26 @@ fetch(`${API_BASE_URL}/un/sdn/latest`).then((r) => r.json()),
       const unDataRaw = (unRes as LatestResponse<BaseEntry>).data || [];
 
       nextResults.restricted = restrictedData.filter((item) => {
-        const text = normalizeForSearch(
-          `${item.name ?? ""} ${item.birth ?? ""} ${item.country ?? ""}`
-        );
-        return text.includes(q);
+        return matches([formatRestrictedName(item.name)]);
       });
 
       const ofacData = ofacDataRaw.filter(isSouthKoreaEntry);
       nextResults.ofac = ofacData.filter((item) => {
-        const text = normalizeForSearch(
-          `${item.name ?? ""} ${item.birth ?? ""} ${item.country ?? ""}`
-        );
-        return text.includes(q);
+        return matches([item.name]);
       });
 
       const unData = unDataRaw.filter(isSouthKoreaEntry);
       nextResults.un = unData.filter((item) => {
-        const text = normalizeForSearch(
-          `${item.name ?? ""} ${item.birth ?? ""} ${item.country ?? ""}`
-        );
-        return text.includes(q);
+        return matches([item.name]);
       });
 
       if (myToken !== searchTokenRef.current) return;
 
       setResults(nextResults);
-      setUpdatedAt({
-        vasp: vaspLatest.updatedAt,
-        restricted: (restrictedRes as LatestResponse<BaseEntry>).updatedAt,
-        ofac: (ofacRes as LatestResponse<BaseEntry>).updatedAt,
-        un: (unRes as LatestResponse<BaseEntry>).updatedAt,
-      });
     } catch (e) {
       console.log("🔍 WatchList 검색 실패", e);
+      setResults(makeEmptyResults());
+      setErrorMessage("검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       if (myToken === searchTokenRef.current) {
         setLoading(false);
@@ -346,7 +508,11 @@ fetch(`${API_BASE_URL}/un/sdn/latest`).then((r) => r.json()),
                 </Text>
               </View>
 
-              {totalCount === 0 && !loading && (
+              {!!errorMessage && !loading && (
+                <Text style={styles.errorHint}>{errorMessage}</Text>
+              )}
+
+              {!errorMessage && totalCount === 0 && !loading && (
                 <Text style={styles.emptyHint}>검색 결과가 없습니다.</Text>
               )}
             </View>
@@ -364,8 +530,9 @@ fetch(`${API_BASE_URL}/un/sdn/latest`).then((r) => r.json()),
               title="금융거래 등 제한대상자"
               count={results.restricted.length}
               entries={results.restricted}
+              renderTitle={(item) => formatRestrictedName(item.name)}
               renderLine={(item) =>
-                `${item.name ?? ""} ${item.birth ? "(" + item.birth + ")" : ""} ${item.country ?? ""}`
+                `${item.birth ? "(" + item.birth + ")" : ""} ${item.country ?? ""}`.trim()
               }
             />
 
@@ -400,10 +567,11 @@ type SectionProps = {
   title: string;
   count: number;
   entries: BaseEntry[];
+  renderTitle?: (item: BaseEntry) => string;
   renderLine: (item: BaseEntry) => string;
 };
 
-function Section({ title, count, entries, renderLine }: SectionProps) {
+function Section({ title, count, entries, renderTitle, renderLine }: SectionProps) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -416,7 +584,7 @@ function Section({ title, count, entries, renderLine }: SectionProps) {
       ) : (
         entries.map((item) => (
           <View key={item.id} style={styles.row}>
-            <Text style={styles.rowTitle}>{item.name}</Text>
+            <Text style={styles.rowTitle}>{renderTitle ? renderTitle(item) : item.name}</Text>
             <Text style={styles.rowDetail}>{renderLine(item)}</Text>
           </View>
         ))
@@ -540,6 +708,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: "rgba(234, 240, 255, 0.55)",
     fontSize: 12,
+    textAlign: "center",
+  },
+  errorHint: {
+    marginTop: 10,
+    color: "#FCA5A5",
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: "center",
   },
 
