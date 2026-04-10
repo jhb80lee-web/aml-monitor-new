@@ -13,6 +13,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { BlurView } from "expo-blur";
+import { setAppBadgeCount } from "../app/notificationsConfig";
 import { API_BASE_URL } from "../constants/api";
 
 const SETTINGS_KEY = "aml.settings.all.v1";
@@ -36,6 +37,8 @@ const HIDE_EXTRA = 120;
 const DEBUG_BANNER = __DEV__;
 
 type SourceKey = "ofac" | "un" | "vasp" | "restricted";
+type SeenMap = Partial<Record<SourceKey, string>>;
+type LatestBySource = Partial<Record<SourceKey, LatestMeta>>;
 
 type StoredSettings = {
   alarmEnabled: boolean;
@@ -146,6 +149,7 @@ export default function InAppUpdateBanner() {
 
   const targetSourceRef = useRef<SourceKey | null>(null);
   const targetUpdatedAtRef = useRef<string | null>(null);
+  const latestBySourceRef = useRef<LatestBySource>({});
 
   const translateY = useRef(new Animated.Value(0)).current;
   const hideYRef = useRef(-200);
@@ -166,6 +170,20 @@ export default function InAppUpdateBanner() {
     if (notify.restricted) list.push("restricted");
     return list;
   }, [notify]);
+
+  const syncBadgeCount = useCallback(
+    async (seen: SeenMap, latestBySource: LatestBySource = latestBySourceRef.current) => {
+      latestBySourceRef.current = latestBySource;
+
+      const count = watchedSources.reduce((acc, src) => {
+        const updatedAt = latestBySource[src]?.updatedAt;
+        return updatedAt && seen[src] !== updatedAt ? acc + 1 : acc;
+      }, 0);
+
+      await setAppBadgeCount(count);
+    },
+    [watchedSources]
+  );
 
   const loadSettings = useCallback(async () => {
     try {
@@ -197,10 +215,11 @@ export default function InAppUpdateBanner() {
 
       cleaned[src] = updatedAt;
       await AsyncStorage.setItem(LAST_SEEN_KEY, JSON.stringify(cleaned));
+      await syncBadgeCount(cleaned);
     } catch {
       // ignore
     }
-  }, []);
+  }, [syncBadgeCount]);
 
   const dismissBanner = useCallback(
     (opts?: { markSeen?: boolean }) => {
@@ -277,6 +296,8 @@ export default function InAppUpdateBanner() {
 
     if (!enabled) {
       setVisible(false);
+      latestBySourceRef.current = {};
+      await setAppBadgeCount(0);
       return;
     }
 
@@ -301,10 +322,14 @@ export default function InAppUpdateBanner() {
       }
 
       let newest: LatestMeta | null = null;
+      const latestBySource: LatestBySource = {};
       for (const src of watchedSources) {
         const m = await fetchLatestMeta(src);
+        latestBySource[src] = m;
         newest = pickNewest(newest, m);
       }
+
+      await syncBadgeCount(seen, latestBySource);
 
       if (DEBUG_BANNER) console.log("[BANNER] newest =", newest);
 
@@ -339,6 +364,7 @@ export default function InAppUpdateBanner() {
     enabled,
     watchedSources,
     onlyOnChange,
+    syncBadgeCount,
     showBannerFor,
     clearAutoTimer,
     translateY,

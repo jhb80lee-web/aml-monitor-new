@@ -1,10 +1,11 @@
 // aml_app/aml-monitor-new/app/Home/_layout.tsx
-import React from "react";
+import React, { useEffect } from "react";
 import { View, StyleSheet, Platform } from "react-native";
 import { Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FullWindowOverlay } from "react-native-screens";
 
+import { initNotifications } from "../notificationsConfig";
 import InAppUpdateBanner from "../../components/InAppUpdateBanner";
 
 const APP_BG = "#020617";
@@ -15,6 +16,10 @@ const TOP_GAP = -8; // ✅ 배너를 더 위로 (기존 8)
 
 export default function HomeLayout() {
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    void initNotifications();
+  }, []);
 
   // ✅ "배너가 차지하는 실제 터치 영역"을 상단으로만 제한
   //    (이 영역 밖은 오버레이가 없으니 터치가 절대 안 막힘)

@@ -1,0 +1,18 @@
+
+name = "orange-bread-2e13"
+main = "src/index.ts"
+compatibility_date = "2025-12-01"
+
+[vars]
+CORS_ORIGIN = "*"
+ADMIN_KEY = "aml-admin-key-2025"
+APP_VERSION = "v14"
+GIT_SHA = "local"
+
+
+[[r2_buckets]]
+binding = "AML_BUCKET"
+bucket_name = "aml-storage"
+
+[triggers]
+crons = ["*/30 * * * *"]
