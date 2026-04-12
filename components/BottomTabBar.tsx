@@ -47,7 +47,7 @@ const TABS: Tab[] = [
   },
   {
     key: "peps",
-    label: "PEPs",
+    label: "CIA",
     icon: "id-card-outline",
     href: "/Home/peps",
     isActive: (p) => p.startsWith("/Home/peps"),

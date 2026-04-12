@@ -3,6 +3,8 @@ export type CiaPepCountry = {
   name: string;
   letter: string;
   count: number;
+  lastUpdated?: string;
+  sourceUrl?: string;
 };
 
 export type CiaPepEntry = {
@@ -20,6 +22,8 @@ export type CiaPepLatestResponse = {
   countries: CiaPepCountry[];
   data: CiaPepEntry[];
 };
+
+import { resolveIsoAlpha2CountryCodeOrThrow } from "./isoCountryCode";
 
 export const CIA_PEP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -112,6 +116,7 @@ async function buildFromCiaSource(): Promise<CiaPepLatestResponse> {
   const pages = pageResults.filter(Boolean) as Array<{
     code: string;
     country: string;
+    slug?: string;
     dateUpdated: string;
     leaders: any[];
     leaders2: any[];
@@ -133,6 +138,8 @@ async function buildFromCiaSource(): Promise<CiaPepLatestResponse> {
       name: page.country,
       letter: firstLetter(page.country),
       count: entries.length,
+      lastUpdated: page.dateUpdated,
+      sourceUrl: buildCountrySourceUrl(page.slug),
     });
 
     for (let i = 0; i < entries.length; i += 1) {
@@ -197,7 +204,11 @@ async function fetchCountryPage(countryName: string) {
     }
 
     return {
-      code: String(page.code || slug).toUpperCase(),
+      slug,
+      code: resolveIsoAlpha2CountryCodeOrThrow(
+        String(page.country),
+        String(page.code || slug)
+      ),
       country: String(page.country),
       dateUpdated: normalizeSourceDate(page.date_updated),
       leaders: Array.isArray(page.leaders) ? page.leaders : [],
@@ -283,6 +294,12 @@ function pickLatestUpdatedAt(pages: Array<{ dateUpdated: string }>) {
     .sort((a, b) => b.ms - a.ms);
 
   return values[0]?.value || new Date().toISOString();
+}
+
+function buildCountrySourceUrl(slug?: string) {
+  const value = String(slug || "").trim();
+  if (!value) return "";
+  return `https://www.cia.gov/resources/world-leaders/foreign-governments/${value}/`;
 }
 
 async function mapLimit<T, R>(

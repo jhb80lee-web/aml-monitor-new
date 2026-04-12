@@ -1,3 +1,5 @@
+import { resolveIsoAlpha2CountryCodeOrThrow } from "./lib/isoCountryCode.mjs";
+
 const WORKER_BASE_URL =
   process.env.WORKER_BASE_URL || "https://orange-bread-2e13.jhb80lee-793.workers.dev";
 
@@ -52,6 +54,8 @@ async function main() {
       name: page.country,
       letter: firstLetter(page.country),
       count: entries.length,
+      lastUpdated: page.dateUpdated,
+      sourceUrl: buildCountrySourceUrl(page.slug),
     });
 
     for (let i = 0; i < entries.length; i++) {
@@ -152,7 +156,10 @@ async function fetchCountryPage(countryName) {
 
     return {
       slug,
-      code: String(page.code || slug).toUpperCase(),
+      code: resolveIsoAlpha2CountryCodeOrThrow(
+        String(page.country),
+        String(page.code || slug)
+      ),
       country: String(page.country),
       dateUpdated: normalizeSourceDate(page.date_updated),
       leaders: Array.isArray(page.leaders) ? page.leaders : [],
@@ -237,6 +244,12 @@ function pickLatestUpdatedAt(pages) {
     .sort((a, b) => b.ms - a.ms);
 
   return values[0]?.value || new Date().toISOString();
+}
+
+function buildCountrySourceUrl(slug) {
+  const value = String(slug || "").trim();
+  if (!value) return "";
+  return `https://www.cia.gov/resources/world-leaders/foreign-governments/${value}/`;
 }
 
 async function mapLimit(items, limit, mapper) {

@@ -1,4 +1,5 @@
 // aml-monitor-new/worker/src/index.ts
+import { resolveIsoAlpha2CountryCode } from "../../constants/isoCountryCode";
 
 export interface Env {
   AML_BUCKET: R2Bucket;
@@ -822,19 +823,29 @@ function computeOfacDiff(latest: any, prev: any) {
 }
 
 function buildPepCountryMeta(data: any[]) {
-  const counts = new Map<string, { code: string; name: string; letter: string; count: number }>();
+  const counts = new Map<
+    string,
+    { code: string; name: string; letter: string; count: number; lastUpdated?: string; sourceUrl?: string }
+  >();
 
   for (const row of data || []) {
-    const code = String(row?.countryCode || "").trim().toUpperCase();
+    const code = resolveIsoAlpha2CountryCode(
+      String(row?.country || "").trim(),
+      String(row?.countryCode || "").trim().toUpperCase()
+    );
     const name = String(row?.country || "").trim();
     if (!code || !name) continue;
 
     const letterMatch = name.toUpperCase().match(/[A-Z]/);
     const letter = letterMatch ? letterMatch[0] : "#";
+    const lastUpdated = String(row?.countryLastUpdated || row?.countryUpdatedAt || "").trim();
+    const sourceUrl = String(row?.countrySourceUrl || row?.countryUrl || "").trim();
     const existing = counts.get(code);
 
     if (existing) {
       existing.count += 1;
+      if (!existing.lastUpdated && lastUpdated) existing.lastUpdated = lastUpdated;
+      if (!existing.sourceUrl && sourceUrl) existing.sourceUrl = sourceUrl;
       continue;
     }
 
@@ -843,6 +854,8 @@ function buildPepCountryMeta(data: any[]) {
       name,
       letter,
       count: 1,
+      ...(lastUpdated ? { lastUpdated } : {}),
+      ...(sourceUrl ? { sourceUrl } : {}),
     });
   }
 

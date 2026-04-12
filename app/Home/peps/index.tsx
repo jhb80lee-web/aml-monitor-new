@@ -90,9 +90,6 @@ export default function PepsIndexScreen() {
           ) : (
             <>
               <Text style={styles.cardTitle}>요약</Text>
-              <Text style={styles.cardSub}>
-                기준일: {json?.updatedAt ? String(json.updatedAt).slice(0, 10) : "-"}
-              </Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>전체 국가</Text>
                 <Text style={styles.summaryValue}>{totalCountries.toLocaleString()}개</Text>
@@ -162,6 +159,7 @@ export default function PepsIndexScreen() {
 
           {countries.map((country: CiaPepCountry) => {
             const title = country.code === country.name ? country.name : `${country.name} (${country.code})`;
+            const updatedAt = formatDateOnly(country.lastUpdated);
 
             return (
               <Pressable
@@ -171,6 +169,7 @@ export default function PepsIndexScreen() {
               >
                 <Text style={styles.countryTitle}>{title}</Text>
                 <Text style={styles.countrySub}>{country.count.toLocaleString()}명</Text>
+                <Text style={styles.countryMeta}>최신 업데이트 {updatedAt}</Text>
               </Pressable>
             );
           })}
@@ -180,6 +179,21 @@ export default function PepsIndexScreen() {
       <BottomTabBar />
     </SafeAreaView>
   );
+}
+
+function formatDateOnly(value?: string) {
+  if (!value) return "-";
+
+  const direct = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  if (direct) return direct[1];
+
+  const date = new Date(String(value).trim());
+  if (Number.isNaN(date.getTime())) return "-";
+
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 const styles = StyleSheet.create({
@@ -270,4 +284,5 @@ const styles = StyleSheet.create({
   },
   countryTitle: { color: "#EAF0FF", fontSize: 14, fontWeight: "900", marginBottom: 4 },
   countrySub: { color: "rgba(234,240,255,0.65)", fontSize: 12, lineHeight: 16 },
+  countryMeta: { color: "rgba(156,194,255,0.72)", fontSize: 11, marginTop: 4 },
 });

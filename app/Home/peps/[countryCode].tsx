@@ -63,6 +63,7 @@ export default function PepsCountryScreen() {
 
   const title = countryMeta?.name ?? countryCode ?? "국가";
   const invalidCountryCode = !loading && !error && !!json && !!countryCode && !countryMeta;
+  const countryUpdatedAt = formatDateOnly(countryMeta?.lastUpdated);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -105,9 +106,6 @@ export default function PepsCountryScreen() {
           ) : (
             <>
               <Text style={styles.cardTitle}>요약</Text>
-              <Text style={styles.cardSub}>
-                기준일: {json?.updatedAt ? String(json.updatedAt).slice(0, 10) : "-"}
-              </Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>국가 코드</Text>
                 <Text style={styles.summaryValue}>{countryCode || "-"}</Text>
@@ -115,6 +113,10 @@ export default function PepsCountryScreen() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>인물 수</Text>
                 <Text style={styles.summaryValue}>{entries.length.toLocaleString()}명</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>최신 업데이트</Text>
+                <Text style={styles.summaryValue}>{countryUpdatedAt}</Text>
               </View>
             </>
           )}
@@ -154,6 +156,21 @@ export default function PepsCountryScreen() {
       <BottomTabBar />
     </SafeAreaView>
   );
+}
+
+function formatDateOnly(value?: string) {
+  if (!value) return "-";
+
+  const direct = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  if (direct) return direct[1];
+
+  const date = new Date(String(value).trim());
+  if (Number.isNaN(date.getTime())) return "-";
+
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 const styles = StyleSheet.create({
