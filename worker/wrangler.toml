@@ -15,4 +15,4 @@ binding = "AML_BUCKET"
 bucket_name = "aml-storage"
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["0 */4 * * *"]
