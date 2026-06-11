@@ -14,8 +14,8 @@ on:
         default: false
         type: boolean
   schedule:
-    # KST 09:00 / 21:00 = UTC 00:00 / 12:00
-    - cron: "0 0,12 * * *"
+    # Every 4 hours (UTC 00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+    - cron: "0 */4 * * *"
 
 permissions:
   contents: write
